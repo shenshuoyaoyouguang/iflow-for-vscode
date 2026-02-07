@@ -191,19 +191,22 @@ export class IFlowClient {
     }
   }
 
-  private getIFlowCliAuthInfo(): { baseUrl: string; apiKey: string } | null {
+  private getIFlowSettingsPath(): string {
+    return path.join(os.homedir(), '.iflow', 'settings.json');
+  }
+
+  private updateIFlowCliModel(model: ModelType): void {
     try {
-      const settingsPath = path.join(os.homedir(), '.iflow', 'settings.json');
+      const settingsPath = this.getIFlowSettingsPath();
       const content = fs.readFileSync(settingsPath, 'utf-8');
       const settings = JSON.parse(content);
-      const baseUrl = settings.baseUrl?.trim();
-      const apiKey = settings.apiKey?.trim();
-      if (baseUrl && apiKey) {
-        return { baseUrl, apiKey };
+      if (settings.modelName !== model) {
+        settings.modelName = model;
+        fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2), 'utf-8');
+        this.log(`Updated ~/.iflow/settings.json modelName to: ${model}`);
       }
-      return null;
-    } catch {
-      return null;
+    } catch (err) {
+      this.log(`Failed to update iFlow CLI model: ${err instanceof Error ? err.message : String(err)}`);
     }
   }
 
@@ -214,6 +217,7 @@ export class IFlowClient {
     const options: Record<string, unknown> = {
       timeout: config.timeout,
       logLevel: config.debugLogging ? 'DEBUG' : 'WARN',
+      cwd: vscode.workspace.workspaceFolders?.[0]?.uri.fsPath,
     };
 
     if (useManualProcess) {
@@ -263,22 +267,15 @@ export class IFlowClient {
     this.isCancelled = false;
     const config = this.getConfig();
 
+    // Update model in CLI settings so all internal code paths use it
+    this.updateIFlowCliModel(options.model);
+
     const sdkOptions: Record<string, unknown> = {
       ...this.getSDKOptions(),
       sessionSettings: {
         permission_mode: this.mapMode(options.mode),
       },
     };
-
-    const baseUrl = config.baseUrl?.trim();
-    const cliAuth = !baseUrl ? this.getIFlowCliAuthInfo() : null;
-    if (baseUrl || cliAuth) {
-      sdkOptions.authMethodInfo = {
-        baseUrl: baseUrl || cliAuth!.baseUrl,
-        modelName: options.model,
-        ...(cliAuth && !baseUrl ? { apiKey: cliAuth.apiKey } : {}),
-      };
-    }
 
     this.log(`Starting run with options: ${JSON.stringify({ mode: options.mode, model: options.model, think: options.think })}`);
 

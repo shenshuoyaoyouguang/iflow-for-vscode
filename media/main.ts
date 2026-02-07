@@ -18,7 +18,8 @@ const MODELS = [
   'Qwen3-Coder-Plus',
   'Kimi-K2-Thinking',
   'MiniMax-M2.1',
-  'Kimi-K2-0905'
+  'Kimi-K2-0905',
+  'Kimi-K2.5'
 ] as const;
 
 type ModelType = typeof MODELS[number];
@@ -233,7 +234,7 @@ class IFlowApp {
             <option value="default" ${conversation?.mode === 'default' ? 'selected' : ''}>Default</option>
             <option value="yolo" ${conversation?.mode === 'yolo' ? 'selected' : ''}>YOLO</option>
             <option value="plan" ${conversation?.mode === 'plan' ? 'selected' : ''}>Plan</option>
-            <option value="autoEdit" ${conversation?.mode === 'autoEdit' ? 'selected' : ''}>Auto Edit</option>
+            <option value="autoEdit" ${conversation?.mode === 'autoEdit' ? 'selected' : ''}>Smart</option>
           </select>
           <label class="toggle-label">
             <input type="checkbox" id="think-toggle" ${conversation?.think ? 'checked' : ''}>
