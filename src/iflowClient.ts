@@ -1,5 +1,8 @@
 import * as vscode from 'vscode';
 import * as cp from 'child_process';
+import * as fs from 'fs';
+import * as path from 'path';
+import * as os from 'os';
 import { StreamChunk, ConversationMode, ModelType, AttachedFile } from './protocol';
 
 // SDK types (loaded dynamically)
@@ -16,6 +19,11 @@ async function getSDK(): Promise<SDKModule> {
     sdkModule = await import('@iflow-ai/iflow-cli-sdk');
   }
   return sdkModule;
+}
+
+/** @internal Test-only helper to inject a mock SDK module. */
+export function __setSDKModuleForTests(mod: SDKModule | null): void {
+  sdkModule = mod;
 }
 
 export interface RunOptions {
@@ -183,6 +191,22 @@ export class IFlowClient {
     }
   }
 
+  private getIFlowCliAuthInfo(): { baseUrl: string; apiKey: string } | null {
+    try {
+      const settingsPath = path.join(os.homedir(), '.iflow', 'settings.json');
+      const content = fs.readFileSync(settingsPath, 'utf-8');
+      const settings = JSON.parse(content);
+      const baseUrl = settings.baseUrl?.trim();
+      const apiKey = settings.apiKey?.trim();
+      if (baseUrl && apiKey) {
+        return { baseUrl, apiKey };
+      }
+      return null;
+    } catch {
+      return null;
+    }
+  }
+
   private getSDKOptions(): Record<string, unknown> {
     const config = this.getConfig();
     const useManualProcess = !!config.nodePath;
@@ -247,13 +271,13 @@ export class IFlowClient {
     };
 
     const baseUrl = config.baseUrl?.trim();
-    if (baseUrl) {
+    const cliAuth = !baseUrl ? this.getIFlowCliAuthInfo() : null;
+    if (baseUrl || cliAuth) {
       sdkOptions.authMethodInfo = {
-        baseUrl,
+        baseUrl: baseUrl || cliAuth!.baseUrl,
         modelName: options.model,
+        ...(cliAuth && !baseUrl ? { apiKey: cliAuth.apiKey } : {}),
       };
-    } else {
-      this.log('No iflow.baseUrl configured; using iFlow CLI auth settings without overriding authMethodInfo.');
     }
 
     this.log(`Starting run with options: ${JSON.stringify({ mode: options.mode, model: options.model, think: options.think })}`);
