@@ -80,6 +80,7 @@ interface ConversationState {
   conversations: Conversation[];
   cliAvailable: boolean;
   cliVersion: string | null;
+  cliDiagnostics: string | null;
   isStreaming: boolean;
 }
 
@@ -96,6 +97,7 @@ type WebviewMessage =
   | { type: 'setModel'; model: ModelType }
   | { type: 'sendMessage'; content: string; attachedFiles: AttachedFile[] }
   | { type: 'cancelCurrent' }
+  | { type: 'recheckCli' }
   | { type: 'ready' };
 
 type ExtensionMessage =
@@ -364,24 +366,6 @@ class IFlowApp {
 
   private renderMessages(): string {
     const conversation = this.getCurrentConversation();
-    const cliAvailable = this.state?.cliAvailable ?? false;
-
-    if (!cliAvailable) {
-      return `
-        <div class="messages">
-          <div class="error-callout">
-            <span class="icon">⚠</span>
-            <div>
-              <strong>IFlow SDK connection failed</strong>
-              <p>
-                Please ensure the iFlow CLI is installed and accessible in your PATH,
-                or check the Output panel (IFlow) for details.
-              </p>
-            </div>
-          </div>
-        </div>
-      `;
-    }
 
     if (!conversation || conversation.messages.length === 0) {
       return `

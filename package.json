@@ -1,17 +1,18 @@
 {
   "name": "iflow-for-vscode",
+  "publisher": "YauMike",
   "displayName": "iflow-for-vscode",
   "description": "Extension for iflow",
   "version": "0.0.1",
+  "repository": "https://github.com/xsw632/iflow-for-vscode.git",
   "engines": {
     "vscode": "^1.108.1"
   },
   "categories": [
     "Other"
   ],
-  "activationEvents": [
-    "onCommand:iflow-for-vscode.openPanel"
-  ],
+  "icon": "media/iflow_icon.png",
+  "activationEvents": [],
   "main": "./dist/extension.js",
   "contributes": {
     "commands": [
@@ -19,11 +20,35 @@
         "command": "iflow-for-vscode.openPanel",
         "title": "IFlow: Open Panel",
         "icon": {
-          "light": "iflow_favicon.svg",
-          "dark": "iflow_favicon.svg"
+          "light": "media/iflow_favicon.svg",
+          "dark": "media/iflow_favicon.svg"
         }
+      },
+      {
+        "command": "iflow-for-vscode.lockGroup",
+        "title": "IFlow: Lock Editor Group",
+        "icon": "$(lock)"
       }
     ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "iflow-container",
+          "title": "IFlow",
+          "icon": "media/iflow_favicon.svg"
+        }
+      ]
+    },
+    "views": {
+      "iflow-container": [
+        {
+          "type": "webview",
+          "id": "iflow-sidebar",
+          "name": "IFlow",
+          "icon": "media/iflow_favicon.svg"
+        }
+      ]
+    },
     "menus": {
       "editor/title": [
         {

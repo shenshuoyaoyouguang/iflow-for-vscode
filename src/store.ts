@@ -22,14 +22,15 @@ export class ConversationStore {
     this.memento = memento;
     this.onStateChange = onStateChange;
 
-    // Load saved conversations
-    const saved = memento.get<{ conversations: Conversation[]; currentId: string | null }>(STORAGE_KEY);
+    // Load saved conversations and CLI status
+    const saved = memento.get<{ conversations: Conversation[]; currentId: string | null; cliAvailable?: boolean; cliVersion?: string | null }>(STORAGE_KEY);
 
     this.state = {
       currentConversationId: saved?.currentId || null,
       conversations: saved?.conversations || [],
-      cliAvailable: false,
-      cliVersion: null,
+      cliAvailable: true,
+      cliVersion: saved?.cliVersion ?? null,
+      cliDiagnostics: null,
       isStreaming: false
     };
   }
@@ -43,9 +44,11 @@ export class ConversationStore {
     return this.state.conversations.find(c => c.id === this.state.currentConversationId) || null;
   }
 
-  setCliStatus(available: boolean, version: string | null): void {
+  setCliStatus(available: boolean, version: string | null, diagnostics?: string): void {
     this.state.cliAvailable = available;
     this.state.cliVersion = version;
+    this.state.cliDiagnostics = diagnostics ?? null;
+    this.save();
     this.notifyChange();
   }
 
@@ -338,7 +341,9 @@ export class ConversationStore {
   private save(): void {
     this.memento.update(STORAGE_KEY, {
       conversations: this.state.conversations,
-      currentId: this.state.currentConversationId
+      currentId: this.state.currentConversationId,
+      cliAvailable: this.state.cliAvailable,
+      cliVersion: this.state.cliVersion
     });
   }
 

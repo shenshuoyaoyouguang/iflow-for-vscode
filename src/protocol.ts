@@ -76,6 +76,7 @@ export interface ConversationState {
   conversations: Conversation[];
   cliAvailable: boolean;
   cliVersion: string | null;
+  cliDiagnostics: string | null;
   isStreaming: boolean;
 }
 
@@ -93,6 +94,7 @@ export type WebviewMessage =
   | { type: 'setModel'; model: ModelType }
   | { type: 'sendMessage'; content: string; attachedFiles: AttachedFile[] }
   | { type: 'cancelCurrent' }
+  | { type: 'recheckCli' }
   | { type: 'ready' };
 
 // Messages from extension to webview
