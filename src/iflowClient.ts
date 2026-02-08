@@ -754,18 +754,32 @@ export class IFlowClient {
         break;
 
       case sdk.MessageType.TOOL_CALL:
-        if (message.status === 'pending' || message.status === 'running') {
+        this.log(`TOOL_CALL: status=${message.status}, toolName=${message.toolName}, label=${message.label}, args=${JSON.stringify(message.args)}`);
+        if (message.status === 'pending' || message.status === 'in_progress') {
           chunks.push({
             chunkType: 'tool_start',
             name: message.toolName || message.label || 'unknown',
-            input: {}
+            input: message.args || {},
+            label: message.label || undefined
           });
         } else if (message.status === 'completed') {
+          if (message.output) {
+            chunks.push({
+              chunkType: 'tool_output',
+              content: message.output
+            });
+          }
           chunks.push({
             chunkType: 'tool_end',
             status: 'completed'
           });
-        } else if (message.status === 'error') {
+        } else if (message.status === 'failed') {
+          if (message.output) {
+            chunks.push({
+              chunkType: 'tool_output',
+              content: message.output
+            });
+          }
           chunks.push({
             chunkType: 'tool_end',
             status: 'error'

@@ -2,7 +2,8 @@ import * as vscode from 'vscode';
 import { WebviewHandler } from './webviewHandler';
 
 export class IFlowSidebarProvider implements vscode.WebviewViewProvider {
-  public static readonly viewType = 'iflow-sidebar';
+  public static readonly primaryViewType = 'iflow-sidebar';
+  public static readonly secondaryViewType = 'iflow-sidebar-secondary';
 
   private handler: WebviewHandler | null = null;
   private view: vscode.WebviewView | null = null;

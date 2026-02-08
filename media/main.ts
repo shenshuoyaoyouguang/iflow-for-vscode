@@ -29,7 +29,7 @@ type StreamChunk =
   | { chunkType: 'code_start'; language: string; filename?: string }
   | { chunkType: 'code_content'; content: string }
   | { chunkType: 'code_end' }
-  | { chunkType: 'tool_start'; name: string; input: Record<string, unknown> }
+  | { chunkType: 'tool_start'; name: string; input: Record<string, unknown>; label?: string }
   | { chunkType: 'tool_output'; content: string }
   | { chunkType: 'tool_end'; status: 'completed' | 'error' }
   | { chunkType: 'thinking_start' }
@@ -42,7 +42,7 @@ type StreamChunk =
 type OutputBlock =
   | { type: 'text'; content: string }
   | { type: 'code'; language: string; filename?: string; content: string }
-  | { type: 'tool'; name: string; input: Record<string, unknown>; output: string; status: 'running' | 'completed' | 'error' }
+  | { type: 'tool'; name: string; input: Record<string, unknown>; output: string; status: 'running' | 'completed' | 'error'; label?: string }
   | { type: 'thinking'; content: string; collapsed: boolean }
   | { type: 'file_ref'; path: string; lineStart?: number; lineEnd?: number }
   | { type: 'error'; message: string }
@@ -433,13 +433,10 @@ class IFlowApp {
             <div class="tool-header" data-collapsible>
               <span class="tool-icon">${block.status === 'running' ? '⏳' : block.status === 'completed' ? '✓' : '✗'}</span>
               <span class="tool-name">${this.escapeHtml(block.name)}</span>
+              <span class="tool-summary">${this.escapeHtml(this.getToolSummary(block))}</span>
               <span class="expand-icon">▼</span>
             </div>
             <div class="tool-content collapsed">
-              <div class="tool-input">
-                <strong>Input:</strong>
-                <pre>${this.escapeHtml(JSON.stringify(block.input, null, 2))}</pre>
-              </div>
               ${block.output ? `
                 <div class="tool-output">
                   <strong>Output:</strong>
@@ -489,6 +486,34 @@ class IFlowApp {
           </div>
         `;
     }
+  }
+
+  private getToolSummary(block: Extract<OutputBlock, { type: 'tool' }>): string {
+    // Use label if available (human-readable summary from SDK)
+    if (block.label) {
+      return block.label;
+    }
+    // Extract meaningful summary from input args based on tool name
+    const input = block.input;
+    if (!input || Object.keys(input).length === 0) return '';
+
+    // Common file-related tools: show the file path
+    const filePath = input.file_path || input.path || input.filePath;
+    if (typeof filePath === 'string') return filePath;
+
+    // Command tools: show the command
+    const command = input.command || input.cmd;
+    if (typeof command === 'string') {
+      return command.length > 80 ? command.substring(0, 77) + '...' : command;
+    }
+
+    // Fallback: show first string value
+    for (const val of Object.values(input)) {
+      if (typeof val === 'string' && val.length > 0) {
+        return val.length > 80 ? val.substring(0, 77) + '...' : val;
+      }
+    }
+    return '';
   }
 
   private renderPendingIndicator(): string {
@@ -1148,12 +1173,146 @@ class IFlowApp {
   }
 
   private renderMarkdown(text: string): string {
-    // Simple markdown rendering
+    const lines = text.split('\n');
+    const result: string[] = [];
+    let i = 0;
+
+    while (i < lines.length) {
+      const line = lines[i];
+
+      // Fenced code block
+      const fenceMatch = line.match(/^```(\w*)/);
+      if (fenceMatch) {
+        const lang = fenceMatch[1] || '';
+        const codeLines: string[] = [];
+        i++;
+        while (i < lines.length && !lines[i].startsWith('```')) {
+          codeLines.push(lines[i]);
+          i++;
+        }
+        if (i < lines.length) i++; // skip closing ```
+        const code = this.escapeHtml(codeLines.join('\n'));
+        result.push(`<div class="block-code"><div class="code-header"><span class="language">${lang}</span></div><pre><code>${code}</code></pre></div>`);
+        continue;
+      }
+
+      // Horizontal rule
+      if (/^(\s*[-*_]\s*){3,}$/.test(line)) {
+        result.push('<hr>');
+        i++;
+        continue;
+      }
+
+      // Headers
+      const headerMatch = line.match(/^(#{1,6})\s+(.+)/);
+      if (headerMatch) {
+        const level = headerMatch[1].length;
+        result.push(`<h${level}>${this.renderInline(headerMatch[2])}</h${level}>`);
+        i++;
+        continue;
+      }
+
+      // Table: detect header row followed by separator row
+      if (line.includes('|') && i + 1 < lines.length && /^\s*\|?\s*[-:]+[-| :]*$/.test(lines[i + 1])) {
+        const tableLines: string[] = [];
+        while (i < lines.length && lines[i].includes('|')) {
+          tableLines.push(lines[i]);
+          i++;
+        }
+        result.push(this.renderTable(tableLines));
+        continue;
+      }
+
+      // Blockquote
+      if (line.startsWith('>')) {
+        const quoteLines: string[] = [];
+        while (i < lines.length && lines[i].startsWith('>')) {
+          quoteLines.push(lines[i].replace(/^>\s?/, ''));
+          i++;
+        }
+        result.push(`<blockquote>${this.renderMarkdown(quoteLines.join('\n'))}</blockquote>`);
+        continue;
+      }
+
+      // Unordered list
+      if (/^\s*[-*+]\s+/.test(line)) {
+        const listItems: string[] = [];
+        while (i < lines.length && /^\s*[-*+]\s+/.test(lines[i])) {
+          listItems.push(lines[i].replace(/^\s*[-*+]\s+/, ''));
+          i++;
+        }
+        result.push('<ul>' + listItems.map(item => `<li>${this.renderInline(item)}</li>`).join('') + '</ul>');
+        continue;
+      }
+
+      // Ordered list
+      if (/^\s*\d+\.\s+/.test(line)) {
+        const listItems: string[] = [];
+        while (i < lines.length && /^\s*\d+\.\s+/.test(lines[i])) {
+          listItems.push(lines[i].replace(/^\s*\d+\.\s+/, ''));
+          i++;
+        }
+        result.push('<ol>' + listItems.map(item => `<li>${this.renderInline(item)}</li>`).join('') + '</ol>');
+        continue;
+      }
+
+      // Empty line
+      if (line.trim() === '') {
+        i++;
+        continue;
+      }
+
+      // Paragraph
+      const paraLines: string[] = [];
+      while (i < lines.length && lines[i].trim() !== '' && !lines[i].match(/^(#{1,6}\s|```|>\s|[-*+]\s|\d+\.\s|\s*[-*_]\s*[-*_]\s*[-*_])/) && !lines[i].includes('|')) {
+        paraLines.push(lines[i]);
+        i++;
+      }
+      result.push(`<p>${this.renderInline(paraLines.join('\n'))}</p>`);
+    }
+
+    return result.join('\n');
+  }
+
+  private renderInline(text: string): string {
     return this.escapeHtml(text)
       .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
       .replace(/\*(.*?)\*/g, '<em>$1</em>')
       .replace(/`(.*?)`/g, '<code>$1</code>')
+      .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2">$1</a>')
       .replace(/\n/g, '<br>');
+  }
+
+  private renderTable(lines: string[]): string {
+    const parseRow = (row: string): string[] => {
+      return row.split('|').map(c => c.trim()).filter((_, i, arr) => {
+        // Remove empty first/last cells from leading/trailing pipes
+        if (i === 0 && arr[0] === '') return false;
+        if (i === arr.length - 1 && arr[arr.length - 1] === '') return false;
+        return true;
+      });
+    };
+
+    if (lines.length < 2) return this.escapeHtml(lines.join('\n'));
+
+    const headers = parseRow(lines[0]);
+    // lines[1] is the separator row, skip it
+    const bodyRows = lines.slice(2).map(parseRow);
+
+    let html = '<table><thead><tr>';
+    for (const h of headers) {
+      html += `<th>${this.renderInline(h)}</th>`;
+    }
+    html += '</tr></thead><tbody>';
+    for (const row of bodyRows) {
+      html += '<tr>';
+      for (const cell of row) {
+        html += `<td>${this.renderInline(cell)}</td>`;
+      }
+      html += '</tr>';
+    }
+    html += '</tbody></table>';
+    return html;
   }
 }
 

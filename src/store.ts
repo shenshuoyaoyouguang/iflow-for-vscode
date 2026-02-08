@@ -256,15 +256,29 @@ export class ConversationStore {
         // Code block is already complete
         break;
 
-      case 'tool_start':
-        blocks.push({
-          type: 'tool',
-          name: chunk.name,
-          input: chunk.input,
-          output: '',
-          status: 'running'
-        });
+      case 'tool_start': {
+        // If the last block is a running tool with the same name, update it
+        // (SDK sends pending first, then in_progress with actual args/label)
+        const lastToolBlock = blocks[blocks.length - 1];
+        if (lastToolBlock?.type === 'tool' && lastToolBlock.status === 'running' && lastToolBlock.name === chunk.name) {
+          if (chunk.input && Object.keys(chunk.input).length > 0) {
+            lastToolBlock.input = chunk.input;
+          }
+          if (chunk.label) {
+            lastToolBlock.label = chunk.label;
+          }
+        } else {
+          blocks.push({
+            type: 'tool',
+            name: chunk.name,
+            input: chunk.input,
+            output: '',
+            status: 'running',
+            label: chunk.label
+          });
+        }
         break;
+      }
 
       case 'tool_output': {
         const toolBlock = blocks[blocks.length - 1];

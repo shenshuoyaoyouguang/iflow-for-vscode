@@ -1,15 +1,25 @@
 {
   "name": "iflow-for-vscode",
   "publisher": "YauMike",
-  "displayName": "iflow-for-vscode",
-  "description": "Extension for iflow",
-  "version": "0.0.1",
+  "displayName": "IFlow for VS Code",
+  "description": "Bring IFlow (iflow CLI) into VS Code: chat panel, commands, and editor-group lock.",
+  "version": "0.0.2",
   "repository": "https://github.com/xsw632/iflow-for-vscode.git",
+  "homepage": "https://github.com/xsw632/iflow-for-vscode",
+  "bugs": {
+    "url": "https://github.com/xsw632/iflow-for-vscode/issues"
+  },
   "engines": {
     "vscode": "^1.108.1"
   },
   "categories": [
     "Other"
+  ],
+  "keywords": [
+    "iflow",
+    "ai",
+    "chat",
+    "assistant"
   ],
   "icon": "media/iflow_icon.png",
   "activationEvents": [],
@@ -37,6 +47,13 @@
           "title": "IFlow",
           "icon": "media/iflow_favicon.svg"
         }
+      ],
+      "secondarySidebar": [
+        {
+          "id": "iflow-container-secondary",
+          "title": "IFlow",
+          "icon": "media/iflow_favicon.svg"
+        }
       ]
     },
     "views": {
@@ -44,6 +61,14 @@
         {
           "type": "webview",
           "id": "iflow-sidebar",
+          "name": "IFlow",
+          "icon": "media/iflow_favicon.svg"
+        }
+      ],
+      "iflow-container-secondary": [
+        {
+          "type": "webview",
+          "id": "iflow-sidebar-secondary",
           "name": "IFlow",
           "icon": "media/iflow_favicon.svg"
         }

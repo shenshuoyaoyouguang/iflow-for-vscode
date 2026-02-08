@@ -17,14 +17,19 @@ export function activate(context: vscode.ExtensionContext) {
 	});
 	context.subscriptions.push(lockDisposable);
 
-	// Register the sidebar webview provider
-	const sidebarProvider = new IFlowSidebarProvider(context.extensionUri, context.globalState);
-	const sidebarDisposable = vscode.window.registerWebviewViewProvider(
-		IFlowSidebarProvider.viewType,
-		sidebarProvider,
-		{ webviewOptions: { retainContextWhenHidden: true } }
-	);
-	context.subscriptions.push(sidebarDisposable);
+	// Register both primary and secondary sidebar webview providers
+	const registerSidebarView = (viewType: string) => {
+		const sidebarProvider = new IFlowSidebarProvider(context.extensionUri, context.globalState);
+		const sidebarDisposable = vscode.window.registerWebviewViewProvider(
+			viewType,
+			sidebarProvider,
+			{ webviewOptions: { retainContextWhenHidden: true } }
+		);
+		context.subscriptions.push(sidebarDisposable);
+	};
+
+	registerSidebarView(IFlowSidebarProvider.primaryViewType);
+	registerSidebarView(IFlowSidebarProvider.secondaryViewType);
 }
 
 export function deactivate() {}

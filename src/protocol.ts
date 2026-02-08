@@ -21,7 +21,7 @@ export type StreamChunk =
   | { chunkType: 'code_start'; language: string; filename?: string }
   | { chunkType: 'code_content'; content: string }
   | { chunkType: 'code_end' }
-  | { chunkType: 'tool_start'; name: string; input: Record<string, unknown> }
+  | { chunkType: 'tool_start'; name: string; input: Record<string, unknown>; label?: string }
   | { chunkType: 'tool_output'; content: string }
   | { chunkType: 'tool_end'; status: 'completed' | 'error' }
   | { chunkType: 'thinking_start' }
@@ -35,7 +35,7 @@ export type StreamChunk =
 export type OutputBlock =
   | { type: 'text'; content: string }
   | { type: 'code'; language: string; filename?: string; content: string }
-  | { type: 'tool'; name: string; input: Record<string, unknown>; output: string; status: 'running' | 'completed' | 'error' }
+  | { type: 'tool'; name: string; input: Record<string, unknown>; output: string; status: 'running' | 'completed' | 'error'; label?: string }
   | { type: 'thinking'; content: string; collapsed: boolean }
   | { type: 'file_ref'; path: string; lineStart?: number; lineEnd?: number }
   | { type: 'error'; message: string }
