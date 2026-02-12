@@ -268,6 +268,19 @@ export class WebviewHandler {
     }
   }
 
+  private async getWorkspaceFileList(): Promise<string[]> {
+    const workspaceFolders = vscode.workspace.workspaceFolders;
+    if (!workspaceFolders) {
+      return [];
+    }
+
+    const excludePattern = '**/node_modules/**,**/.git/**,**/dist/**,**/out/**';
+    const files = await vscode.workspace.findFiles('**/*', excludePattern, 200);
+
+    const rootPath = workspaceFolders[0].uri.fsPath;
+    return files.map(f => path.relative(rootPath, f.fsPath));
+  }
+
   private async handleSendMessage(content: string, attachedFiles: AttachedFile[]): Promise<void> {
     // Immediately reflect "running" in UI so Enter has instant feedback.
     // Expensive checks (CLI probe/connect) happen after this optimistic state update.
@@ -297,13 +310,16 @@ export class WebviewHandler {
     const conversation = this.store.getCurrentConversation();
     if (!conversation) return;
 
+    const workspaceFiles = await this.getWorkspaceFileList();
+
     await this.client.run(
       {
         prompt: content,
         attachedFiles,
         mode: conversation.mode,
         think: conversation.think,
-        model: conversation.model
+        model: conversation.model,
+        workspaceFiles
       },
       (chunk) => {
         this.store.appendToAssistantMessage(chunk);

@@ -36,6 +36,7 @@ export interface RunOptions {
   mode: ConversationMode;
   think: boolean;
   model: ModelType;
+  workspaceFiles?: string[];
 }
 
 interface ManualStartInfo {
@@ -526,6 +527,12 @@ export class IFlowClient {
 
   private buildPrompt(options: RunOptions): string {
     let prompt = '';
+
+    if (options.workspaceFiles && options.workspaceFiles.length > 0) {
+      prompt += '=== Workspace Files ===\n';
+      prompt += options.workspaceFiles.join('\n');
+      prompt += '\n=== End Workspace Files ===\n\n';
+    }
 
     if (options.attachedFiles.length > 0) {
       prompt += '=== Attached Files ===\n';
