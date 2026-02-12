@@ -7,11 +7,11 @@
 			"DOM"
 		],
 		"sourceMap": true,
-		"rootDir": "media",
+		"rootDir": ".",
 		"outDir": "out/media",
 		"strict": true,
 		"moduleResolution": "bundler"
 	},
-	"include": ["media/**/*"],
+	"include": ["media/**/*", "src/protocol.ts"],
 	"exclude": ["node_modules"]
 }
