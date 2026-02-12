@@ -54,6 +54,9 @@ export class IFlowClient {
   private parser: ThinkingParser | null = null;
   // Auto-detection cache: undefined = not attempted, null = attempted & failed, object = success
   private _cachedAutoDetect: { nodePath: string; iflowScript: string } | null | undefined = undefined;
+  // Pending permission requests: requestId -> resolve callback
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  private pendingPermissions = new Map<number, (response: any) => void>();
 
   private log(message: string): void {
     const debugLogging = vscode.workspace.getConfiguration('iflow').get<boolean>('debugLogging', false);
@@ -379,6 +382,9 @@ export class IFlowClient {
       this.client = new sdk.IFlowClient(sdkOptions);
       await this.client.connect();
       this.patchTransport(this.client);
+      if (options.mode === 'default') {
+        this.patchPermission(this.client);
+      }
       this.isConnected = true;
       this.log('Connected to iFlow');
 
@@ -510,6 +516,111 @@ export class IFlowClient {
     this.log('patchTransport: WebSocket message buffering installed');
   }
 
+  /**
+   * Monkey-patch SDK protocol to enable interactive tool call approval.
+   *
+   * The SDK's Protocol.handleRequestPermission() auto-responds to permission
+   * requests (approve in AUTO mode, cancel in MANUAL mode) without exposing
+   * them to the client. This patch replaces that handler to:
+   *  1. Push a confirmation message to the client's messageQueue
+   *  2. Block until the user approves/rejects via approveToolCall/rejectToolCall
+   *  3. Send the user's decision back to the iFlow CLI server
+   */
+  private patchPermission(client: SDKClientType): void {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const protocol = (client as any).protocol;
+    if (!protocol) {
+      this.log('patchPermission: protocol not available, skipping');
+      return;
+    }
+
+    const self = this;
+    const sendResult = protocol.sendResult.bind(protocol);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const messageQueue: any[] = (client as any).messageQueue;
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    protocol.handleRequestPermission = async function (message: any) {
+      const { id, params } = message;
+      const toolCall = params.toolCall || {};
+      const options = params.options || [];
+
+      self.log(`patchPermission: permission request id=${id}, tool=${toolCall.title}, type=${toolCall.type}, options=${JSON.stringify(options)}`);
+
+      // Push a confirmation message into messageQueue so the run() loop can
+      // forward it to the webview via onChunk.
+      messageQueue.push({
+        type: 'tool_call',
+        id: String(id),
+        label: toolCall.title || 'Tool Call',
+        icon: { type: 'emoji', value: '🔧' },
+        status: 'pending',
+        toolName: toolCall.title,
+        confirmation: {
+          type: toolCall.type || 'other',
+          description: toolCall.title || '',
+        },
+        _requestId: id,
+      });
+
+      // Block until user responds
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const response = await new Promise<any>((resolve) => {
+        self.pendingPermissions.set(id, resolve);
+      });
+
+      // Send user's decision to iFlow CLI
+      if (id !== undefined) {
+        await sendResult(id, response);
+      }
+
+      self.log(`patchPermission: responded id=${id}, outcome=${response.outcome?.outcome}`);
+      return { type: 'tool_confirmation', params, response };
+    };
+
+    this.log('patchPermission: Interactive permission handling installed');
+  }
+
+  /**
+   * Approve a pending tool call permission request.
+   */
+  async approveToolCall(requestId: number, outcome: string): Promise<void> {
+    const resolve = this.pendingPermissions.get(requestId);
+    if (!resolve) {
+      this.log(`approveToolCall: no pending permission for id ${requestId}`);
+      return;
+    }
+
+    const optionId = outcome === 'alwaysAllow' ? 'proceed_always' : 'proceed_once';
+    resolve({
+      outcome: {
+        outcome: 'selected',
+        optionId,
+      }
+    });
+    this.pendingPermissions.delete(requestId);
+    this.log(`approveToolCall: approved id=${requestId}, optionId=${optionId}`);
+  }
+
+  /**
+   * Reject a pending tool call permission request.
+   */
+  async rejectToolCall(requestId: number): Promise<void> {
+    const resolve = this.pendingPermissions.get(requestId);
+    if (!resolve) {
+      this.log(`rejectToolCall: no pending permission for id ${requestId}`);
+      return;
+    }
+
+    resolve({
+      outcome: {
+        outcome: 'cancelled',
+      }
+    });
+    this.pendingPermissions.delete(requestId);
+    this.log(`rejectToolCall: rejected id=${requestId}`);
+  }
+
   private mapMode(mode: ConversationMode): 'default' | 'smart' | 'yolo' | 'plan' {
     switch (mode) {
       case 'default':
@@ -612,6 +723,27 @@ export class IFlowClient {
 
       case sdk.MessageType.TOOL_CALL: {
         this.log(`TOOL_CALL: status=${message.status}, toolName=${message.toolName}, label=${message.label}, args=${JSON.stringify(message.args)}`);
+
+        // Check if this is a permission confirmation request (injected by patchPermission)
+        if (message.confirmation && message._requestId !== undefined) {
+          // Emit tool_start so the tool appears as a running entry in the messages
+          chunks.push({
+            chunkType: 'tool_start',
+            name: message.toolName || message.label || 'unknown',
+            input: {},
+            label: message.label || undefined
+          });
+          // Emit tool_confirmation so the webview can show the approval UI in the composer
+          chunks.push({
+            chunkType: 'tool_confirmation',
+            requestId: message._requestId,
+            toolName: message.toolName || message.label || 'unknown',
+            description: message.confirmation.description || '',
+            confirmationType: message.confirmation.type || 'other',
+          });
+          break;
+        }
+
         const enrichedInput = this.enrichToolInput(message);
         const toolName = message.toolName || message.label || 'unknown';
 

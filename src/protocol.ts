@@ -24,6 +24,7 @@ export type StreamChunk =
   | { chunkType: 'tool_start'; name: string; input: Record<string, unknown>; label?: string }
   | { chunkType: 'tool_output'; content: string }
   | { chunkType: 'tool_end'; status: 'completed' | 'error' }
+  | { chunkType: 'tool_confirmation'; requestId: number; toolName: string; description: string; confirmationType: string }
   | { chunkType: 'thinking_start' }
   | { chunkType: 'thinking_content'; content: string }
   | { chunkType: 'thinking_end' }
@@ -94,6 +95,7 @@ export type WebviewMessage =
   | { type: 'setThink'; enabled: boolean }
   | { type: 'setModel'; model: ModelType }
   | { type: 'sendMessage'; content: string; attachedFiles: AttachedFile[] }
+  | { type: 'toolApproval'; requestId: number; outcome: 'allow' | 'alwaysAllow' | 'reject' }
   | { type: 'cancelCurrent' }
   | { type: 'recheckCli' }
   | { type: 'ready' };

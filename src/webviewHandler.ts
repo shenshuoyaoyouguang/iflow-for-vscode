@@ -135,6 +135,20 @@ export class WebviewHandler {
         await this.handleSendMessage(message.content, message.attachedFiles);
         break;
 
+      case 'toolApproval':
+        if (message.outcome === 'reject') {
+          await this.client.rejectToolCall(message.requestId);
+          // Terminate the entire conversation, equivalent to pressing stop
+          await this.client.cancel();
+          this.store.batchUpdate(() => {
+            this.store.endAssistantMessage();
+            this.store.setStreaming(false);
+          });
+        } else {
+          await this.client.approveToolCall(message.requestId, message.outcome);
+        }
+        break;
+
       case 'cancelCurrent':
         await this.client.cancel();
         this.store.setStreaming(false);

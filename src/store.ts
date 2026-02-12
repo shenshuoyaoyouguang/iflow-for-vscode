@@ -331,6 +331,11 @@ export class ConversationStore {
         });
         break;
 
+      case 'tool_confirmation':
+        // Handled directly by the webview (composer becomes approval UI).
+        // No block added — the tool_start chunk already added a running tool block.
+        break;
+
       case 'error':
         blocks.push({ type: 'error', message: chunk.message });
         break;

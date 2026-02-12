@@ -36,6 +36,7 @@ class IFlowApp {
   private conversationSearch = '';
   private showModeMenu = false;
   private composerResizeObserver: ResizeObserver | null = null;
+  private pendingConfirmation: { requestId: number; toolName: string; description: string } | null = null;
 
   constructor() {
     this.vscode = acquireVsCodeApi();
@@ -124,12 +125,23 @@ class IFlowApp {
 
       case 'streamChunk':
         // Streaming updates are handled by stateUpdated to avoid duplicate scroll work.
+        // Exception: tool_confirmation needs to transform the composer into an approval UI.
+        if (message.chunk.chunkType === 'tool_confirmation') {
+          this.pendingConfirmation = {
+            requestId: message.chunk.requestId,
+            toolName: message.chunk.toolName,
+            description: message.chunk.description,
+          };
+          this.render();
+        }
         break;
 
       case 'streamEnd':
       case 'streamError':
         // No render() needed here — the stateUpdated with isStreaming=false
         // already triggers a full render.
+        // Clear any pending confirmation when the stream ends.
+        this.pendingConfirmation = null;
         break;
     }
   }
@@ -532,6 +544,11 @@ class IFlowApp {
   }
 
   private renderComposer(): string {
+    // When a tool call needs approval, replace the composer with a selection panel
+    if (this.pendingConfirmation) {
+      return this.renderApprovalPanel();
+    }
+
     const conversation = this.getCurrentConversation();
     const isThinking = conversation?.think ?? false;
     const currentModel = conversation?.model ?? 'GLM-4.7';
@@ -581,6 +598,40 @@ class IFlowApp {
              </div>
           </div>
         </div>
+      </div>
+    `;
+  }
+
+  private renderApprovalPanel(): string {
+    const conf = this.pendingConfirmation!;
+    const toolLabel = escapeHtml(conf.toolName);
+    return `
+      <div class="composer approval-panel">
+        <div class="approval-question">Allow <strong>${toolLabel}</strong>?</div>
+        <div class="approval-options">
+          <button class="approval-option" data-approval="allow">
+            <span class="approval-key">1</span>
+            <span class="approval-label">Yes</span>
+          </button>
+          <button class="approval-option" data-approval="alwaysAllow">
+            <span class="approval-key">2</span>
+            <span class="approval-label">Yes, allow all edits this session</span>
+          </button>
+          <button class="approval-option" data-approval="reject">
+            <span class="approval-key">3</span>
+            <span class="approval-label">No</span>
+          </button>
+          <div class="approval-option feedback-option">
+            <span class="approval-key">4</span>
+            <input
+              type="text"
+              id="approval-feedback-input"
+              class="approval-feedback-input"
+              placeholder="Tell IFlow what to do instead..."
+            />
+          </div>
+        </div>
+        <div class="approval-hint">Esc to cancel</div>
       </div>
     `;
   }
@@ -673,6 +724,12 @@ class IFlowApp {
   }
 
   private attachComposerListeners(): void {
+    // If the approval panel is showing, attach approval-specific listeners instead
+    if (this.pendingConfirmation) {
+      this.attachApprovalListeners();
+      return;
+    }
+
     document.getElementById('attach-btn')?.addEventListener('click', () => {
       this.vscode.postMessage({ type: 'pickFiles' });
     });
@@ -702,6 +759,68 @@ class IFlowApp {
         this.render();
       }
     });
+  }
+
+  private attachApprovalListeners(): void {
+    const conf = this.pendingConfirmation;
+    if (!conf) return;
+
+    const handleApproval = (outcome: 'allow' | 'alwaysAllow' | 'reject') => {
+      this.vscode.postMessage({ type: 'toolApproval', requestId: conf.requestId, outcome });
+      if (outcome === 'alwaysAllow') {
+        this.vscode.postMessage({ type: 'setMode', mode: 'smart' });
+      }
+      this.pendingConfirmation = null;
+      this.render();
+    };
+
+    // Click handlers for the 3 button options
+    document.querySelectorAll('.approval-option[data-approval]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const outcome = (btn as HTMLElement).dataset.approval as 'allow' | 'alwaysAllow' | 'reject';
+        handleApproval(outcome);
+      });
+    });
+
+    // Feedback input: Enter to reject + send feedback text
+    const feedbackInput = document.getElementById('approval-feedback-input') as HTMLInputElement;
+    feedbackInput?.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        // Reject the tool call
+        this.vscode.postMessage({ type: 'toolApproval', requestId: conf.requestId, outcome: 'reject' });
+        this.pendingConfirmation = null;
+        this.render();
+      } else if (e.key === 'Escape') {
+        e.preventDefault();
+        handleApproval('reject');
+      }
+    });
+
+    // Global keyboard shortcuts: 1/2/3/Esc
+    const keyHandler = (e: KeyboardEvent) => {
+      // Don't intercept if focus is on the feedback input
+      if (document.activeElement === feedbackInput) return;
+
+      if (e.key === '1') { e.preventDefault(); handleApproval('allow'); }
+      else if (e.key === '2') { e.preventDefault(); handleApproval('alwaysAllow'); }
+      else if (e.key === '3') { e.preventDefault(); handleApproval('reject'); }
+      else if (e.key === 'Escape') { e.preventDefault(); handleApproval('reject'); }
+      else if (e.key === '4') {
+        e.preventDefault();
+        feedbackInput?.focus();
+      }
+    };
+    document.addEventListener('keydown', keyHandler);
+
+    // Clean up when approval panel is removed (next render will not re-attach)
+    const observer = new MutationObserver(() => {
+      if (!document.querySelector('.approval-panel')) {
+        document.removeEventListener('keydown', keyHandler);
+        observer.disconnect();
+      }
+    });
+    observer.observe(document.body, { childList: true, subtree: true });
   }
 
   private attachContentListeners(): void {
