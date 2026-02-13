@@ -1,10 +1,7 @@
 import type { AttachedFile, WebviewMessage } from '../src/protocol';
 import { escapeHtml } from './markdownRenderer';
 import { getFileName, getFileIcon } from './toolRenderers';
-
-function escapeAttr(text: string): string {
-  return text.replace(/"/g, '&quot;').replace(/'/g, '&#39;');
-}
+import { escapeAttr } from './webviewUtils';
 
 export interface InputHost {
   postMessage(msg: WebviewMessage): void;

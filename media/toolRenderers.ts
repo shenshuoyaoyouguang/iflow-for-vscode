@@ -3,6 +3,12 @@ import type { OutputBlock } from '../src/protocol';
 
 type ToolBlock = Extract<OutputBlock, { type: 'tool' }>;
 
+// ── Constants ─────────────────────────────────────────────────────────
+const MAX_DIFF_LINES = 220;
+const MAX_COMMAND_LINES = 260;
+const PATH_SHORTEN_THRESHOLD = 60;
+const COMMAND_TRUNCATE_LENGTH = 80;
+
 // ── Input helpers ──────────────────────────────────────────────────
 
 function getInputString(input: Record<string, unknown>, keys: string[]): string | null {
@@ -58,7 +64,7 @@ export function getFileIcon(path: string): string {
 }
 
 function shortenPath(p: string): string {
-  if (p.length <= 60) {
+  if (p.length <= PATH_SHORTEN_THRESHOLD) {
     return p;
   }
   return `...${p.slice(-57)}`;
@@ -191,7 +197,7 @@ export function getToolHeadline(block: ToolBlock): string {
 
   const command = getInputString(input, ['command', 'cmd']);
   if (command) {
-    return `Run ${command.length > 80 ? `${command.slice(0, 77)}...` : command}`;
+    return `Run ${command.length > COMMAND_TRUNCATE_LENGTH ? `${command.slice(0, COMMAND_TRUNCATE_LENGTH - 3)}...` : command}`;
   }
 
   const path = getInputString(input, ['file_path', 'path', 'filePath']);
@@ -289,10 +295,9 @@ function extractEditedFileDiffFromPatch(block: ToolBlock): { fileName: string; a
     return null;
   }
 
-  const maxLines = 220;
-  const visibleLines = renderedLines.slice(0, maxLines);
-  if (renderedLines.length > maxLines) {
-    visibleLines.push({ kind: 'meta', text: `... ${renderedLines.length - maxLines} more lines` });
+  const visibleLines = renderedLines.slice(0, MAX_DIFF_LINES);
+  if (renderedLines.length > MAX_DIFF_LINES) {
+    visibleLines.push({ kind: 'meta', text: `... ${renderedLines.length - MAX_DIFF_LINES} more lines` });
   }
 
   return {
@@ -337,10 +342,9 @@ function extractEditedFileDiffFromOldNew(block: ToolBlock): { fileName: string; 
     return null;
   }
 
-  const maxLines = 220;
-  const visibleLines = renderedLines.slice(0, maxLines);
-  if (renderedLines.length > maxLines) {
-    visibleLines.push({ kind: 'meta', text: `... ${renderedLines.length - maxLines} more lines` });
+  const visibleLines = renderedLines.slice(0, MAX_DIFF_LINES);
+  if (renderedLines.length > MAX_DIFF_LINES) {
+    visibleLines.push({ kind: 'meta', text: `... ${renderedLines.length - MAX_DIFF_LINES} more lines` });
   }
 
   return { fileName, added, removed, lines: visibleLines };
@@ -364,10 +368,9 @@ function extractCommandPreview(block: ToolBlock): { command: string; lines: stri
   }
 
   const lines = output ? output.split('\n') : (block.status === 'running' ? ['Running...'] : ['(no output)']);
-  const maxLines = 260;
-  const visible = lines.slice(0, maxLines);
-  if (lines.length > maxLines) {
-    visible.push(`... ${lines.length - maxLines} more lines`);
+  const visible = lines.slice(0, MAX_COMMAND_LINES);
+  if (lines.length > MAX_COMMAND_LINES) {
+    visible.push(`... ${lines.length - MAX_COMMAND_LINES} more lines`);
   }
 
   return {
@@ -394,10 +397,9 @@ function renderWriteFilePreview(block: ToolBlock): string {
   }
 
   const lines = raw.split('\n');
-  const maxLines = 220;
-  const visible = lines.slice(0, maxLines);
-  if (lines.length > maxLines) {
-    visible.push(`... ${lines.length - maxLines} more lines`);
+  const visible = lines.slice(0, MAX_DIFF_LINES);
+  if (lines.length > MAX_DIFF_LINES) {
+    visible.push(`... ${lines.length - MAX_DIFF_LINES} more lines`);
   }
 
   const lineHtml = visible.map((line, idx) => `
@@ -420,11 +422,6 @@ function renderWriteFilePreview(block: ToolBlock): string {
       </div>
     </div>
   `;
-}
-
-function renderReadFilePreview(_block: ToolBlock): string {
-  // Read file is displayed as a single headline line only — no expanded preview
-  return '';
 }
 
 function renderEditedFilePreview(block: ToolBlock): string {
@@ -496,10 +493,6 @@ export function renderToolDetailPreview(block: ToolBlock): string {
   const written = renderWriteFilePreview(block);
   if (written) {
     return written;
-  }
-  const read = renderReadFilePreview(block);
-  if (read) {
-    return read;
   }
   return renderCommandPreview(block);
 }

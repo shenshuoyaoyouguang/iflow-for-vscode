@@ -15,6 +15,7 @@ import { escapeHtml, renderMarkdown } from './markdownRenderer';
 import { getToolHeadline, renderToolDetailPreview, getFileName, getFileIcon } from './toolRenderers';
 import { SlashMenuController } from './slashMenuController';
 import { InputController } from './inputController';
+import { escapeAttr, TEXTAREA_MIN_HEIGHT, TEXTAREA_MAX_HEIGHT, COMPOSER_MIN_INSET, COMPOSER_INSET_PADDING } from './webviewUtils';
 
 interface VsCodeApi {
   postMessage(message: WebviewMessage): void;
@@ -289,8 +290,7 @@ class IFlowApp {
       return;
     }
 
-    const minInset = 140;
-    const inset = Math.max(minInset, composer.offsetHeight + 24);
+    const inset = Math.max(COMPOSER_MIN_INSET, composer.offsetHeight + COMPOSER_INSET_PADDING);
     messages.style.paddingBottom = `${inset}px`;
   }
 
@@ -351,7 +351,7 @@ class IFlowApp {
     return `
       <div class="conversation-panel ${this.showConversationPanel ? '' : 'hidden'}" id="conversation-panel">
         <div class="conversation-panel-search">
-          <input type="text" id="conversation-search" placeholder="Search sessions..." value="${this.escapeAttr(this.conversationSearch)}" />
+          <input type="text" id="conversation-search" placeholder="Search sessions..." value="${escapeAttr(this.conversationSearch)}" />
         </div>
         <div class="conversation-panel-list">
           ${groups.length === 0 ? '<div class="conversation-panel-empty">No conversations found</div>' : ''}
@@ -473,7 +473,7 @@ class IFlowApp {
         ${message.attachedFiles.length > 0 ? `
           <div class="attached-files-display">
             ${message.attachedFiles.map(f => `
-              <button class="file-chip small file-open-btn" data-open-file-path="${this.escapeAttr(f.path)}" title="Open ${this.escapeAttr(getFileName(f.path))}">
+              <button class="file-chip small file-open-btn" data-open-file-path="${escapeAttr(f.path)}" title="Open ${escapeAttr(getFileName(f.path))}">
                 <span class="file-icon">${getFileIcon(f.path)}</span>
                 <span class="file-name">${escapeHtml(getFileName(f.path))}</span>
               </button>
@@ -497,7 +497,7 @@ class IFlowApp {
           <div class="block-code">
             <div class="code-header">
               <span class="language">${block.language}${block.filename ? ` - ${block.filename}` : ''}</span>
-              <button class="copy-btn" data-content="${this.escapeAttr(block.content)}">Copy</button>
+              <button class="copy-btn" data-content="${escapeAttr(block.content)}">Copy</button>
             </div>
             <pre><code>${escapeHtml(block.content)}</code></pre>
           </div>
@@ -973,9 +973,9 @@ class IFlowApp {
   }
 
   private autoResizeTextarea(textarea: HTMLTextAreaElement): void {
-    textarea.style.height = '28px';
-    if (textarea.scrollHeight > 28) {
-      textarea.style.height = Math.min(textarea.scrollHeight, 200) + 'px';
+    textarea.style.height = `${TEXTAREA_MIN_HEIGHT}px`;
+    if (textarea.scrollHeight > TEXTAREA_MIN_HEIGHT) {
+      textarea.style.height = Math.min(textarea.scrollHeight, TEXTAREA_MAX_HEIGHT) + 'px';
     }
     this.syncMessagesBottomInset();
   }
@@ -997,10 +997,6 @@ class IFlowApp {
 
   private formatTime(timestamp: number): string {
     return new Date(timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-  }
-
-  private escapeAttr(text: string): string {
-    return text.replace(/"/g, '&quot;').replace(/'/g, '&#39;');
   }
 
   dispose(): void {

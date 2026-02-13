@@ -7,8 +7,6 @@ import { StreamChunk, ConversationMode, ModelType, AttachedFile } from './protoc
 import { ThinkingParser } from './thinkingParser';
 import { findIFlowPathCrossPlatform, resolveIFlowScriptCrossPlatform, deriveNodePathFromIFlow } from './cliDiscovery';
 
-export { ThinkingParser } from './thinkingParser';
-
 // SDK types (loaded dynamically)
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type SDKModule = any;
@@ -29,6 +27,11 @@ async function getSDK(): Promise<SDKModule> {
 export function __setSDKModuleForTests(mod: SDKModule | null): void {
   sdkModule = mod;
 }
+
+// ── Process lifecycle constants ──────────────────────────────────────
+const PROCESS_STARTUP_TIMEOUT_MS = 30_000;
+const PROCESS_READY_FALLBACK_MS = 2_000;
+const PROCESS_INIT_DELAY_MS = 500;
 
 export interface RunOptions {
   prompt: string;
@@ -201,7 +204,7 @@ export class IFlowClient {
         if (!started) {
           reject(new Error('iFlow process startup timeout'));
         }
-      }, 30000);
+      }, PROCESS_STARTUP_TIMEOUT_MS);
 
       this.managedProcess.stdout?.on('data', (data: Buffer) => {
         const output = data.toString();
@@ -212,7 +215,7 @@ export class IFlowClient {
             started = true;
             clearTimeout(timeout);
             // Give it a moment to fully initialize
-            setTimeout(() => resolve(), 500);
+            setTimeout(() => resolve(), PROCESS_INIT_DELAY_MS);
           }
         }
       });
@@ -225,7 +228,7 @@ export class IFlowClient {
           if (!started) {
             started = true;
             clearTimeout(timeout);
-            setTimeout(() => resolve(), 500);
+            setTimeout(() => resolve(), PROCESS_INIT_DELAY_MS);
           }
         }
       });
@@ -245,14 +248,14 @@ export class IFlowClient {
         this.managedProcess = null;
       });
 
-      // If no ready signal after 2 seconds, assume it's ready anyway
+      // If no ready signal after fallback timeout, assume it's ready anyway
       setTimeout(() => {
         if (!started && this.managedProcess && !this.managedProcess.killed) {
           started = true;
           clearTimeout(timeout);
           resolve();
         }
-      }, 2000);
+      }, PROCESS_READY_FALLBACK_MS);
     });
   }
 
@@ -378,7 +381,7 @@ export class IFlowClient {
       const sdkOptions: Record<string, unknown> = {
         ...this.getSDKOptions(manualStart),
         sessionSettings: {
-          permission_mode: this.mapMode(options.mode),
+          permission_mode: options.mode,
         },
       };
 
@@ -662,21 +665,6 @@ export class IFlowClient {
     });
     this.pendingPermissions.delete(requestId);
     this.log(`rejectToolCall: rejected id=${requestId}`);
-  }
-
-  private mapMode(mode: ConversationMode): 'default' | 'smart' | 'yolo' | 'plan' {
-    switch (mode) {
-      case 'default':
-        return 'default';
-      case 'yolo':
-        return 'yolo';
-      case 'plan':
-        return 'plan';
-      case 'smart':
-        return 'smart';
-      default:
-        return 'default';
-    }
   }
 
   private buildPrompt(options: RunOptions): string {
