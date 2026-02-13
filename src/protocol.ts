@@ -10,6 +10,7 @@ export const MODELS = [
   'Qwen3-Coder-Plus',
   'Kimi-K2-Thinking',
   'MiniMax-M2.1',
+  'MiniMax-M2.5',
   'Kimi-K2-0905',
   'Kimi-K2.5'
 ] as const;

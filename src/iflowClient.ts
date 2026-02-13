@@ -52,6 +52,7 @@ export class IFlowClient {
   private isCancelled = false;
   private managedProcess: cp.ChildProcess | null = null;
   private parser: ThinkingParser | null = null;
+  private inNativeThinking = false;
   // Auto-detection cache: undefined = not attempted, null = attempted & failed, object = success
   private _cachedAutoDetect: { nodePath: string; iflowScript: string } | null | undefined = undefined;
   // Pending permission requests: requestId -> resolve callback
@@ -356,6 +357,7 @@ export class IFlowClient {
     onError: (error: string) => void
   ): Promise<void> {
     this.isCancelled = false;
+    this.inNativeThinking = false;
     this.parser = new ThinkingParser();
 
     // Update model in CLI settings so all internal code paths use it
@@ -387,6 +389,13 @@ export class IFlowClient {
       }
       this.isConnected = true;
       this.log('Connected to iFlow');
+
+      // Enable/disable thinking via ACP protocol
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const sessionId = (this.client as any).sessionId;
+      if (sessionId) {
+        await this.sendSetThink(this.client, sessionId, options.think);
+      }
 
       const prompt = this.buildPrompt(options);
       this.log(`Sending message: ${prompt.substring(0, 100)}...`);
@@ -449,6 +458,26 @@ export class IFlowClient {
 
   isRunning(): boolean {
     return this.isConnected && !this.isCancelled;
+  }
+
+  /**
+   * Send session/set_think via the ACP protocol to enable/disable native thinking.
+   */
+  private async sendSetThink(client: SDKClientType, sessionId: string, enabled: boolean): Promise<void> {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const transport = (client as any).transport;
+    if (!transport) {
+      this.log('sendSetThink: transport not available, skipping');
+      return;
+    }
+    const msg = {
+      jsonrpc: '2.0',
+      id: Date.now(),
+      method: 'session/set_think',
+      params: { sessionId, thinkEnabled: enabled, thinkConfig: 'think' }
+    };
+    this.log(`Sending session/set_think: thinkEnabled=${enabled}`);
+    await transport.send(msg);
   }
 
   /**
@@ -658,10 +687,6 @@ export class IFlowClient {
       prompt += '=== End Attached Files ===\n\n';
     }
 
-    if (options.think) {
-      prompt += '[Please think step by step before answering]\n\n';
-    }
-
     prompt += options.prompt;
     return prompt;
   }
@@ -711,7 +736,21 @@ export class IFlowClient {
 
     switch (message.type) {
       case sdk.MessageType.ASSISTANT:
+        // Handle native thought chunks from SDK
+        if (message.chunk?.thought) {
+          if (!this.inNativeThinking) {
+            chunks.push({ chunkType: 'thinking_start' });
+            this.inNativeThinking = true;
+          }
+          chunks.push({ chunkType: 'thinking_content', content: message.chunk.thought });
+        }
+        // Handle text chunks
         if (message.chunk?.text) {
+          // End native thinking block if we were in one
+          if (this.inNativeThinking) {
+            chunks.push({ chunkType: 'thinking_end' });
+            this.inNativeThinking = false;
+          }
           if (this.parser) {
             const parserChunks = this.parser.parse(message.chunk.text);
             chunks.push(...parserChunks);
@@ -809,6 +848,11 @@ export class IFlowClient {
         break;
 
       case sdk.MessageType.TASK_FINISH:
+        // Close any open native thinking block
+        if (this.inNativeThinking) {
+          chunks.push({ chunkType: 'thinking_end' });
+          this.inNativeThinking = false;
+        }
         // Task finish is handled in the run loop
         break;
 
