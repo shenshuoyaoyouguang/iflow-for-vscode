@@ -1,0 +1,154 @@
+{
+  "name": "iflow-for-vscode",
+  "publisher": "YauMike",
+  "displayName": "IFlow for VS Code",
+  "description": "Bring IFlow (iflow CLI) into VS Code: chat panel, commands, and editor-group lock.",
+  "version": "0.0.6",
+  "repository": "https://github.com/xsw632/iflow-for-vscode.git",
+  "homepage": "https://github.com/xsw632/iflow-for-vscode",
+  "bugs": {
+    "url": "https://github.com/xsw632/iflow-for-vscode/issues"
+  },
+  "engines": {
+    "vscode": "^1.82.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "keywords": [
+    "iflow",
+    "ai",
+    "chat",
+    "assistant"
+  ],
+  "icon": "media/iflow_icon.png",
+  "activationEvents": [],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "iflow-for-vscode.openPanel",
+        "title": "IFlow: Open Panel",
+        "icon": {
+          "light": "media/iflow_favicon.svg",
+          "dark": "media/iflow_favicon.svg"
+        }
+      },
+      {
+        "command": "iflow-for-vscode.lockGroup",
+        "title": "IFlow: Lock Editor Group",
+        "icon": "$(lock)"
+      }
+    ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "iflow-container",
+          "title": "IFlow",
+          "icon": "media/iflow_favicon.svg"
+        }
+      ],
+      "secondarySidebar": [
+        {
+          "id": "iflow-container-secondary",
+          "title": "IFlow",
+          "icon": "media/iflow_favicon.svg"
+        }
+      ]
+    },
+    "views": {
+      "iflow-container": [
+        {
+          "type": "webview",
+          "id": "iflow-sidebar",
+          "name": "IFlow",
+          "icon": "media/iflow_favicon.svg"
+        }
+      ],
+      "iflow-container-secondary": [
+        {
+          "type": "webview",
+          "id": "iflow-sidebar-secondary",
+          "name": "IFlow",
+          "icon": "media/iflow_favicon.svg"
+        }
+      ]
+    },
+    "menus": {
+      "editor/title": [
+        {
+          "command": "iflow-for-vscode.openPanel",
+          "group": "navigation"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "IFlow",
+      "properties": {
+        "iflow.nodePath": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null,
+          "description": "Path to the Node.js executable (v22+). Required if your default Node version is too old. Example: ~/.nvm/versions/node/v22.0.0/bin/node"
+        },
+        "iflow.baseUrl": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null,
+          "description": "Optional base URL for the OpenAI-compatible API endpoint (e.g. https://apis.iflow.cn/v1). Only set this if you need the extension to override the CLI's configured endpoint."
+        },
+        "iflow.port": {
+          "type": "number",
+          "default": 8090,
+          "description": "Port for iFlow CLI WebSocket server"
+        },
+        "iflow.timeout": {
+          "type": "number",
+          "default": 60000,
+          "description": "Connection timeout in milliseconds"
+        },
+        "iflow.maxFileBytes": {
+          "type": "number",
+          "default": 80000,
+          "description": "Maximum file size in bytes for attached files"
+        },
+        "iflow.debugLogging": {
+          "type": "boolean",
+          "default": false,
+          "description": "Enable debug logging"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run package",
+    "compile": "webpack",
+    "watch": "webpack --watch",
+    "package": "webpack --mode production --devtool hidden-source-map",
+    "compile-tests": "tsc -p . --outDir out",
+    "watch-tests": "tsc -p . -w --outDir out",
+    "pretest": "npm run compile-tests && npm run compile && npm run lint",
+    "lint": "eslint src",
+    "test": "vscode-test"
+  },
+  "devDependencies": {
+    "@types/mocha": "^10.0.10",
+    "@types/node": "22.x",
+    "@types/vscode": "^1.82.0",
+    "@vscode/test-cli": "^0.0.11",
+    "@vscode/test-electron": "^2.5.2",
+    "eslint": "^9.39.2",
+    "ts-loader": "^9.5.4",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.52.0",
+    "webpack": "^5.104.1",
+    "webpack-cli": "^6.0.1"
+  },
+  "dependencies": {
+    "@iflow-ai/iflow-cli-sdk": "^0.1.9"
+  }
+}
